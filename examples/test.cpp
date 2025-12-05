@@ -32,21 +32,33 @@ int main(void) {
   // Keyboard callback: void(KeyboardKey key, bool isDown)
   input.keyboard_callback = [&](KeyboardKey key, bool isDown) {
     // Track WASD and arrow keys for movement
-    if (key == KEY_W) keyW = isDown;
-    else if (key == KEY_A) keyA = isDown;
-    else if (key == KEY_S) keyS = isDown;
-    else if (key == KEY_D) keyD = isDown;
-    else if (key == KEY_UP) keyUp = isDown;
-    else if (key == KEY_DOWN) keyDown = isDown;
-    else if (key == KEY_LEFT) keyLeft = isDown;
-    else if (key == KEY_RIGHT) keyRight = isDown;
+    if (key == KEY_W)
+      keyW = isDown;
+    else if (key == KEY_A)
+      keyA = isDown;
+    else if (key == KEY_S)
+      keyS = isDown;
+    else if (key == KEY_D)
+      keyD = isDown;
+    else if (key == KEY_UP)
+      keyUp = isDown;
+    else if (key == KEY_DOWN)
+      keyDown = isDown;
+    else if (key == KEY_LEFT)
+      keyLeft = isDown;
+    else if (key == KEY_RIGHT)
+      keyRight = isDown;
 
     // Calculate movement direction
     dir = {0, 0};
-    if (keyW || keyUp) dir.y += 1;
-    if (keyS || keyDown) dir.y -= 1;
-    if (keyA || keyLeft) dir.x += 1;
-    if (keyD || keyRight) dir.x -= 1;
+    if (keyW || keyUp)
+      dir.y += 1;
+    if (keyS || keyDown)
+      dir.y -= 1;
+    if (keyA || keyLeft)
+      dir.x += 1;
+    if (keyD || keyRight)
+      dir.x -= 1;
 
     // Normalize and move ball
     if (dir.x != 0 || dir.y != 0) {
@@ -60,17 +72,18 @@ int main(void) {
     // Calculate the relative mouse movement using the base raylib function
     auto rlDelta = GetMouseDelta();
     // Print the mouse's position and its relative movement using both
-    // calculation methods (second and third pairs of numbers should be the same)
-    std::cout << "{" << pos.x << ", " << pos.y << "} - {" << delta.x
-              << ", " << delta.y << "} - {" << rlDelta.x << ", "
-              << rlDelta.y << "}" << std::endl;
+    // calculation methods (second and third pairs of numbers should be the
+    // same)
+    std::cout << "{" << pos.x << ", " << pos.y << "} - {" << delta.x << ", "
+              << delta.y << "} - {" << rlDelta.x << ", " << rlDelta.y << "}"
+              << std::endl;
   };
 
   // Mouse button callback: void(MouseButton button, bool isDown)
   input.mouse_button_callback = [](MouseButton button, bool isDown) {
     // If this is a press (not a release), print a message!
-    if (isDown)
-      std::cout << "Bang! Mouse button " << button << " pressed!" << std::endl;
+    std::cout << "Bang! Mouse button " << button
+              << (isDown ? " pressed!" : " released!") << std::endl;
   };
 
   // Mouse wheel callback: void(float value, float delta)
