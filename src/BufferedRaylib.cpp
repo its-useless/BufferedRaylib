@@ -18,7 +18,11 @@ namespace raylib {
       for (int key = KEY_NULL; key <= KEY_KP_EQUAL; key++) {
         bool isDown = IsKeyDown((KeyboardKey)key);
         auto it = keyboard_states.find((KeyboardKey)key);
-        if (it == keyboard_states.end() || it->second != isDown) {
+        if (it == keyboard_states.end()) {
+          // Initialize state silently on first poll
+          keyboard_states[(KeyboardKey)key] = isDown;
+        } else if (it->second != isDown) {
+          // Only fire callback on actual state change
           keyboard_states[(KeyboardKey)key] = isDown;
           keyboard_callback((KeyboardKey)key, isDown);
         }
@@ -31,7 +35,11 @@ namespace raylib {
            button++) {
         bool isDown = IsMouseButtonDown((MouseButton)button);
         auto it = mouse_button_states.find((MouseButton)button);
-        if (it == mouse_button_states.end() || it->second != isDown) {
+        if (it == mouse_button_states.end()) {
+          // Initialize state silently on first poll
+          mouse_button_states[(MouseButton)button] = isDown;
+        } else if (it->second != isDown) {
+          // Only fire callback on actual state change
           mouse_button_states[(MouseButton)button] = isDown;
           mouse_button_callback((MouseButton)button, isDown);
         }
@@ -48,7 +56,11 @@ namespace raylib {
           bool isDown = IsGamepadButtonDown(gamepad, (GamepadButton)button);
           auto key = std::make_pair(gamepad, (GamepadButton)button);
           auto it = gamepad_button_states.find(key);
-          if (it == gamepad_button_states.end() || it->second != isDown) {
+          if (it == gamepad_button_states.end()) {
+            // Initialize state silently on first poll
+            gamepad_button_states[key] = isDown;
+          } else if (it->second != isDown) {
+            // Only fire callback on actual state change
             gamepad_button_states[key] = isDown;
             gamepad_button_callback(gamepad, (GamepadButton)button, isDown);
           }
@@ -91,7 +103,14 @@ namespace raylib {
     // Poll mouse position
     if (mouse_position_callback) {
       Vector2 newPos = GetMousePosition();
-      if (!Vector2Equals(newPos, mouse_position)) {
+      // Check if this is the first poll (mouse_position still at initial {0,0})
+      bool isFirstPoll = (mouse_position.x == 0.0f && mouse_position.y == 0.0f);
+      
+      if (isFirstPoll) {
+        // Silently initialize on first poll, don't fire callback
+        mouse_position = newPos;
+      } else if (!Vector2Equals(newPos, mouse_position)) {
+        // Actual position change on subsequent polls
         Vector2 delta = Vector2Subtract(newPos, mouse_position);
         mouse_position = newPos;
         mouse_position_callback(newPos, delta);
