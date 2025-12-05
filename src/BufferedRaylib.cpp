@@ -11,7 +11,8 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
+
+#define MAX_GAMEPADS 16
 
 namespace raylib {
 
@@ -52,7 +53,12 @@ namespace raylib {
   Action& Action::operator=(Action&& o) noexcept {
     type = o.type;
     data = std::move(o.data);
-    callbacks = std::move(o.callbacks);
+    keyboardCallback = std::exchange(o.keyboardCallback, nullptr);
+    mouseButtonCallback = std::exchange(o.mouseButtonCallback, nullptr);
+    gamepadButtonCallback = std::exchange(o.gamepadButtonCallback, nullptr);
+    mouseWheelCallback = std::exchange(o.mouseWheelCallback, nullptr);
+    gamepadAxisCallback = std::exchange(o.gamepadAxisCallback, nullptr);
+    vectorCallback = std::exchange(o.vectorCallback, nullptr);
     if (o.type == Type::Button)
       data.button.buttons = std::exchange(o.data.button.buttons, nullptr);
     else if (o.type == Type::MultiButton)
@@ -73,61 +79,24 @@ namespace raylib {
         if (comboState != lastComboState) {
           // Invoke callbacks for each button in the set
           for (const auto& button : *data.button.buttons) {
-            for (auto& cb : callbacks) {
-              std::visit(
-                  [&](auto& callback) {
-                    if constexpr (std::is_same_v<
-                                      std::decay_t<decltype(callback)>,
-                                      ButtonKeyboardCallback>) {
-                      if (button.type == Button::Type::Keyboard && callback) {
-                        callback(button.keyboard, comboState);
-                      }
-                    } else if constexpr (std::is_same_v<
-                                             std::decay_t<decltype(callback)>,
-                                             ButtonMouseCallback>) {
-                      if (button.type == Button::Type::Mouse && callback) {
-                        callback(button.mouse, comboState);
-                      }
-                    } else if constexpr (std::is_same_v<
-                                             std::decay_t<decltype(callback)>,
-                                             ButtonGamepadCallback>) {
-                      if (button.type == Button::Type::Gamepad && callback) {
-                        callback(button.gamepad.id, button.gamepad.button,
-                                 comboState);
-                      }
-                    }
-                  },
-                  cb);
+            if (button.type == Button::Type::Keyboard && keyboardCallback) {
+              keyboardCallback(button.keyboard, comboState);
+            } else if (button.type == Button::Type::Mouse && mouseButtonCallback) {
+              mouseButtonCallback(button.mouse, comboState);
+            } else if (button.type == Button::Type::Gamepad && gamepadButtonCallback) {
+              gamepadButtonCallback(button.gamepad.id, button.gamepad.button, comboState);
             }
           }
         }
       } else {
         // Invoke callbacks for each button in the set
         for (const auto& button : *data.button.buttons) {
-          for (auto& cb : callbacks) {
-            std::visit(
-                [&](auto& callback) {
-                  if constexpr (std::is_same_v<std::decay_t<decltype(callback)>,
-                                               ButtonKeyboardCallback>) {
-                    if (button.type == Button::Type::Keyboard && callback) {
-                      callback(button.keyboard, isDown);
-                    }
-                  } else if constexpr (std::is_same_v<
-                                           std::decay_t<decltype(callback)>,
-                                           ButtonMouseCallback>) {
-                    if (button.type == Button::Type::Mouse && callback) {
-                      callback(button.mouse, isDown);
-                    }
-                  } else if constexpr (std::is_same_v<
-                                           std::decay_t<decltype(callback)>,
-                                           ButtonGamepadCallback>) {
-                    if (button.type == Button::Type::Gamepad && callback) {
-                      callback(button.gamepad.id, button.gamepad.button,
-                               isDown);
-                    }
-                  }
-                },
-                cb);
+          if (button.type == Button::Type::Keyboard && keyboardCallback) {
+            keyboardCallback(button.keyboard, isDown);
+          } else if (button.type == Button::Type::Mouse && mouseButtonCallback) {
+            mouseButtonCallback(button.mouse, isDown);
+          } else if (button.type == Button::Type::Gamepad && gamepadButtonCallback) {
+            gamepadButtonCallback(button.gamepad.id, button.gamepad.button, isDown);
           }
         }
       }
@@ -144,29 +113,30 @@ namespace raylib {
           GetGamepadAxisMovement(data.axis.gamepad.id, data.axis.gamepad.axis);
       if (movement != 0)
         state += movement;
+      if (state != data.axis.last_state) {
+        float delta = state - data.axis.last_state;
+        if (gamepadAxisCallback) {
+          gamepadAxisCallback(data.axis.gamepad.id, data.axis.gamepad.axis, state, delta);
+        }
+        data.axis.last_state = state;
+      }
+      return;
     } break;
     case Data::Axis::Type::MouseWheel: {
       float movement = GetMouseWheelMove();
       if (movement != 0)
         state += movement;
+      if (state != data.axis.last_state) {
+        float delta = state - data.axis.last_state;
+        if (mouseWheelCallback) {
+          mouseWheelCallback(state, delta);
+        }
+        data.axis.last_state = state;
+      }
+      return;
     } break;
     default:
       assert(data.axis.type != Data::Axis::Type::Invalid);
-    }
-    if (state != data.axis.last_state) {
-      float delta = state - data.axis.last_state;
-      for (auto& cb : callbacks) {
-        std::visit(
-            [&](auto& callback) {
-              if constexpr (std::is_same_v<std::decay_t<decltype(callback)>,
-                                           AxisCallback>) {
-                if (callback)
-                  callback(state, delta);
-              }
-            },
-            cb);
-      }
-      data.axis.last_state = state;
     }
   }
 
@@ -193,16 +163,8 @@ namespace raylib {
     }
     if (!Vector2Equals(state, data.vector.last_state)) {
       Vector2 delta = Vector2Subtract(state, data.vector.last_state);
-      for (auto& cb : callbacks) {
-        std::visit(
-            [&](auto& callback) {
-              if constexpr (std::is_same_v<std::decay_t<decltype(callback)>,
-                                           VectorCallback>) {
-                if (callback)
-                  callback(state, delta);
-              }
-            },
-            cb);
+      if (vectorCallback) {
+        vectorCallback(state, delta);
       }
       data.vector.last_state = state;
     }
@@ -245,16 +207,8 @@ namespace raylib {
     }
     if (!Vector2Equals(state, data.multi.last_state)) {
       Vector2 delta = Vector2Subtract(state, data.multi.last_state);
-      for (auto& cb : callbacks) {
-        std::visit(
-            [&](auto& callback) {
-              if constexpr (std::is_same_v<std::decay_t<decltype(callback)>,
-                                           VectorCallback>) {
-                if (callback)
-                  callback(state, delta);
-              }
-            },
-            cb);
+      if (vectorCallback) {
+        vectorCallback(state, delta);
       }
       data.multi.last_state = state;
     }
@@ -283,7 +237,86 @@ namespace raylib {
   void BufferedInput::PollEvents(bool whileUnfocused /*= false*/) {
     if (!whileUnfocused && !IsWindowFocused())
       return;
-    for (auto& [name, action] : actions)
-      action.PollEvents(name);
+
+    // Poll keyboard keys
+    if (keyboard_callback) {
+      for (int key = KEY_NULL; key <= KEY_KP_EQUAL; key++) {
+        bool isDown = IsKeyDown((KeyboardKey)key);
+        auto it = keyboard_states.find((KeyboardKey)key);
+        if (it == keyboard_states.end() || it->second != isDown) {
+          keyboard_states[(KeyboardKey)key] = isDown;
+          keyboard_callback((KeyboardKey)key, isDown);
+        }
+      }
+    }
+
+    // Poll mouse buttons (check all possible mouse buttons)
+    if (mouse_button_callback) {
+      for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_EXTRA; button++) {
+        bool isDown = IsMouseButtonDown((MouseButton)button);
+        auto it = mouse_button_states.find((MouseButton)button);
+        if (it == mouse_button_states.end() || it->second != isDown) {
+          mouse_button_states[(MouseButton)button] = isDown;
+          mouse_button_callback((MouseButton)button, isDown);
+        }
+      }
+    }
+
+    // Poll gamepad buttons
+    if (gamepad_button_callback) {
+      for (int gamepad = 0; gamepad < MAX_GAMEPADS; gamepad++) {
+        if (!IsGamepadAvailable(gamepad))
+          continue;
+        for (int button = GAMEPAD_BUTTON_UNKNOWN; button <= GAMEPAD_BUTTON_RIGHT_THUMB; button++) {
+          bool isDown = IsGamepadButtonDown(gamepad, (GamepadButton)button);
+          auto key = std::make_pair(gamepad, (GamepadButton)button);
+          auto it = gamepad_button_states.find(key);
+          if (it == gamepad_button_states.end() || it->second != isDown) {
+            gamepad_button_states[key] = isDown;
+            gamepad_button_callback(gamepad, (GamepadButton)button, isDown);
+          }
+        }
+      }
+    }
+
+    // Poll mouse wheel
+    if (mouse_wheel_callback) {
+      float movement = GetMouseWheelMove();
+      if (movement != 0) {
+        mouse_wheel_value += movement;
+        float delta = movement;
+        mouse_wheel_callback(mouse_wheel_value, delta);
+      }
+    }
+
+    // Poll gamepad axes
+    if (gamepad_axis_callback) {
+      for (int gamepad = 0; gamepad < MAX_GAMEPADS; gamepad++) {
+        if (!IsGamepadAvailable(gamepad))
+          continue;
+        for (int axis = GAMEPAD_AXIS_LEFT_X; axis <= GAMEPAD_AXIS_RIGHT_TRIGGER; axis++) {
+          float movement = GetGamepadAxisMovement(gamepad, (GamepadAxis)axis);
+          if (movement != 0) {
+            auto key = std::make_pair(gamepad, (GamepadAxis)axis);
+            auto it = gamepad_axis_states.find(key);
+            float lastValue = (it != gamepad_axis_states.end()) ? it->second : 0.0f;
+            float newValue = lastValue + movement;
+            float delta = movement;
+            gamepad_axis_states[key] = newValue;
+            gamepad_axis_callback(gamepad, (GamepadAxis)axis, newValue, delta);
+          }
+        }
+      }
+    }
+
+    // Poll mouse position
+    if (mouse_position_callback) {
+      Vector2 newPos = GetMousePosition();
+      if (!Vector2Equals(newPos, mouse_position)) {
+        Vector2 delta = Vector2Subtract(newPos, mouse_position);
+        mouse_position = newPos;
+        mouse_position_callback(newPos, delta);
+      }
+    }
   }
 } // namespace raylib

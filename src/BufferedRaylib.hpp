@@ -14,7 +14,7 @@
 #include <set>
 #include <string>
 #include <string_view>
-#include <variant>
+#include <utility>
 #include <vector>
 
 namespace raylib {
@@ -223,21 +223,22 @@ namespace raylib {
       } multi;
     } data;
 
-    // Callback storage - different types for different action types
-    using ButtonKeyboardCallback =
-        std::function<void(KeyboardKey key, bool isDown)>;
-    using ButtonMouseCallback =
-        std::function<void(MouseButton button, bool isDown)>;
-    using ButtonGamepadCallback =
-        std::function<void(int gamepadId, GamepadButton button, bool isDown)>;
-    using AxisCallback = std::function<void(float value, float delta)>;
+    // OpenGL kinda callback types
+    using KeyboardCallback = std::function<void(KeyboardKey key, bool isDown)>;
+    using MouseButtonCallback = std::function<void(MouseButton button, bool isDown)>;
+    using GamepadButtonCallback = std::function<void(int gamepadId, GamepadButton button, bool isDown)>;
+    using MouseWheelCallback = std::function<void(float value, float delta)>;
+    using GamepadAxisCallback = std::function<void(int gamepadId, GamepadAxis axis, float value, float delta)>;
     using VectorCallback = std::function<void(Vector2 state, Vector2 delta)>;
 
-    using CallbackVariant =
-        std::variant<ButtonKeyboardCallback, ButtonMouseCallback,
-                     ButtonGamepadCallback, AxisCallback, VectorCallback>;
-
-    std::vector<CallbackVariant> callbacks;
+    // Store single callback per action type (nullptr if not set)
+    // Only the appropriate callback is used based on the action type
+    KeyboardCallback keyboardCallback = nullptr;
+    MouseButtonCallback mouseButtonCallback = nullptr;
+    GamepadButtonCallback gamepadButtonCallback = nullptr;
+    MouseWheelCallback mouseWheelCallback = nullptr;
+    GamepadAxisCallback gamepadAxisCallback = nullptr;
+    VectorCallback vectorCallback = nullptr;
 
     // Constructors and destructor for the Action class.
     Action() : type(Type::Invalid), data({.button = {}}) {
@@ -257,62 +258,6 @@ namespace raylib {
     }
     Action& operator=(const Action&) = delete;
     Action& operator=(Action&& o) noexcept;
-
-    // Button action callbacks: void(KeyboardKey key, bool isDown)
-    Action& AddCallback(ButtonKeyboardCallback callback) {
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-    Action& SetCallback(ButtonKeyboardCallback callback) {
-      callbacks.clear();
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-
-    // Button action callbacks: void(MouseButton button, bool isDown)
-    Action& AddCallback(ButtonMouseCallback callback) {
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-    Action& SetCallback(ButtonMouseCallback callback) {
-      callbacks.clear();
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-
-    // Button action callbacks: void(int gamepadId, GamepadButton button, bool
-    // isDown)
-    Action& AddCallback(ButtonGamepadCallback callback) {
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-    Action& SetCallback(ButtonGamepadCallback callback) {
-      callbacks.clear();
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-
-    // Axis action callbacks: void(float value, float delta)
-    Action& AddCallback(AxisCallback callback) {
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-    Action& SetCallback(AxisCallback callback) {
-      callbacks.clear();
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-
-    // Vector/MultiButton action callbacks: void(Vector2 state, Vector2 delta)
-    Action& AddCallback(VectorCallback callback) {
-      callbacks.emplace_back(callback);
-      return *this;
-    }
-    Action& SetCallback(VectorCallback callback) {
-      callbacks.clear();
-      callbacks.emplace_back(callback);
-      return *this;
-    }
 
     /**
      * @brief Action that is invoked whenever the abstract button is pressed.
@@ -512,11 +457,11 @@ namespace raylib {
      * delta) -> void
      *
      * @return Action
-     */
     static Action mouse_position() {
       return {Action::Type::Vector,
               {.vector = {Data::Vector::Type::MousePosition}}};
     }
+     */
 
     /**
      * @brief Action that merges two seperate gamepad axis into a single vector.
@@ -536,64 +481,6 @@ namespace raylib {
                                GamepadAxis vertical = GAMEPAD_AXIS_LEFT_Y,
                                int gamepadHorizontal = 0,
                                int gamepadVertical = -1);
-
-    /**
-     * @brief Action that combines button sets pointing in 4 cardinal directions
-     * into a vector which represents the direction of the currently pressed
-     * buttons. ex. If the up and left buttons are pressed, the resulting vector
-     * will be pointing upward and leftward. Callback signature: [](const
-     * std::string_view name, Vector2 dir, Vector2 delta) -> void
-     *
-     * @param up set of keys to represent up (+y) axis
-     * @param down set of keys to represent down (-y) axis
-     * @param left set of keys to represent left (-x) axis
-     * @param right set of keys to represent right (+x) axis
-     * @param normalized normally if there is more than one button in a set, the
-     * vector's length will grow to reflect how many buttons are pushed. While
-     * true none of the vector's axis will ever excede 1.
-     * @note The resulting vector itself will not be normalized! If you need it
-     * to have a length of 1 you will be on your own...
-     * @return Action
-     */
-    static Action quad(ButtonSet up, ButtonSet down, ButtonSet left,
-                       ButtonSet right, bool normalized = true) {
-      Action out{Action::Type::MultiButton};
-      out.data.multi.type = Data::MultiButton::Type::QuadButtons;
-      out.data.multi.quadButtons =
-          new MultiButtonData<4>{{up, down, left, right}, {}, normalized};
-      return out;
-    }
-
-    /**
-     * @brief Action that combines button sets pointing in 4 cardinal directions
-     * into a vector which represents the direction of the currently pressed
-     * buttons. ex. If the up and left buttons are pressed, the resulting vector
-     * will be pointing upward and leftward. Callback signature: [](const
-     * std::string_view name, Vector2 dir, Vector2 delta) -> void
-     *
-     * @note This function is the same as quad, but the parameter order is
-     * changed to represent the common wasd convetion (and defaults are set to
-     * support it)
-     *
-     * @param up set of keys to represent up (+y) axis (default up arrow and w)
-     * @param left set of keys to represent left (-x) axis (default left arrow
-     * and a)
-     * @param down set of keys to represent down (-y) axis (default down arrow
-     * and s)
-     * @param right set of keys to represent right (+x) axis (default right
-     * arrow and d)
-     * @param normalized when true the resulting vector is normalized so that it
-     * always has a length of one (default true)
-     * @return Action
-     */
-    static Action
-    wasd(ButtonSet up = {Button::key(KEY_W), Button::key(KEY_UP)},
-         ButtonSet left = {Button::key(KEY_A), Button::key(KEY_LEFT)},
-         ButtonSet down = {Button::key(KEY_S), Button::key(KEY_DOWN)},
-         ButtonSet right = {Button::key(KEY_D), Button::key(KEY_RIGHT)},
-         bool normalized = true) {
-      return quad(up, down, left, right, normalized);
-    }
 
     /**
      * @brief Helper function which moves the action, equivalent to calling
@@ -631,20 +518,36 @@ namespace raylib {
     void PumpMultiButton(std::string_view name);
   };
 
+  using KeyboardCallback = std::function<void(KeyboardKey key, bool isDown)>;
+  using MouseButtonCallback = std::function<void(MouseButton button, bool isDown)>;
+  using GamepadButtonCallback = std::function<void(int gamepadId, GamepadButton button, bool isDown)>;
+  using MouseWheelCallback = std::function<void(float value, float delta)>;
+  using GamepadAxisCallback = std::function<void(int gamepadId, GamepadAxis axis, float value, float delta)>;
+  using MousePositionCallback = std::function<void(Vector2 position, Vector2 delta)>;
+
   /**
-   * @brief InputManager which is responsible for a map of actions and updating
-   * their values
+   * @brief InputManager with direct callback members for OpenGL-style input handling
    */
   struct BufferedInput {
-    // Map associating names with actions
-    std::map<std::string, Action> actions;
+    // Direct callback members
+    KeyboardCallback keyboard_callback = nullptr;
+    MouseButtonCallback mouse_button_callback = nullptr;
+    GamepadButtonCallback gamepad_button_callback = nullptr;
+    MouseWheelCallback mouse_wheel_callback = nullptr;
+    GamepadAxisCallback gamepad_axis_callback = nullptr;
+    MousePositionCallback mouse_position_callback = nullptr;
 
-    // Access to the action map via the input object itself
-    Action& operator[](const std::string& key) {
-      return actions[key];
-    }
+    // Internal state tracking
+  private:
+    float mouse_wheel_value = 0.0f;
+    Vector2 mouse_position = {0, 0};
+    std::map<KeyboardKey, bool> keyboard_states;
+    std::map<MouseButton, bool> mouse_button_states;
+    std::map<std::pair<int, GamepadButton>, bool> gamepad_button_states;
+    std::map<std::pair<int, GamepadAxis>, float> gamepad_axis_states;
 
-    // Function which updates the state of all actions in the `actions` map.
+  public:
+    // Function which polls all input devices and invokes callbacks
     void PollEvents(bool whileUnfocused = false);
   };
 
