@@ -18,20 +18,16 @@ int main(void) {
 
   Vector2 ballPosition = {(float)screenWidth / 2, (float)screenHeight / 2};
 
-  SetTargetFPS(fps); // Set our game to run at 60 frames-per-second
-  //--------------------------------------------------------------------------------------
+  SetTargetFPS(fps);
+  // =====================================================
 
-  // The buffered input with direct callback members
   raylib::BufferedInput input;
 
-  // Track movement keys for WASD/arrow key movement
   bool keyW = false, keyA = false, keyS = false, keyD = false;
   bool keyUp = false, keyDown = false, keyLeft = false, keyRight = false;
   Vector2 dir = {0, 0};
 
-  // Keyboard callback: void(KeyboardKey key, bool isDown)
   input.keyboard_callback = [&](KeyboardKey key, bool isDown) {
-    // Track WASD and arrow keys for movement
     if (key == KEY_W)
       keyW = isDown;
     else if (key == KEY_A)
@@ -49,7 +45,6 @@ int main(void) {
     else if (key == KEY_RIGHT)
       keyRight = isDown;
 
-    // Calculate movement direction
     dir = {0, 0};
     if (keyW || keyUp)
       dir.y += 1;
@@ -60,36 +55,40 @@ int main(void) {
     if (keyD || keyRight)
       dir.x -= 1;
 
-    // Normalize and move ball
     if (dir.x != 0 || dir.y != 0) {
       dir = Vector2Normalize(dir);
       std::cout << "Movement: {" << dir.x << ", " << dir.y << "}" << std::endl;
     }
   };
 
-  // Mouse position callback: void(Vector2 position, Vector2 delta)
   input.mouse_position_callback = [](Vector2 pos, Vector2 delta) {
-    // Calculate the relative mouse movement using the base raylib function
     auto rlDelta = GetMouseDelta();
-    // Print the mouse's position and its relative movement using both
-    // calculation methods (second and third pairs of numbers should be the
-    // same)
     std::cout << "{" << pos.x << ", " << pos.y << "} - {" << delta.x << ", "
               << delta.y << "} - {" << rlDelta.x << ", " << rlDelta.y << "}"
               << std::endl;
   };
 
-  // Mouse button callback: void(MouseButton button, bool isDown)
   input.mouse_button_callback = [](MouseButton button, bool isDown) {
-    // If this is a press (not a release), print a message!
     std::cout << "Bang! Mouse button " << button
               << (isDown ? " pressed!" : " released!") << std::endl;
   };
 
-  // Mouse wheel callback: void(float value, float delta)
   input.mouse_wheel_callback = [](float value, float delta) {
     std::cout << "Mouse wheel: value=" << value << ", delta=" << delta
               << std::endl;
+  };
+
+  input.gamepad_button_callback = [](int gamepadId, GamepadButton button,
+                                     bool isDown) {
+    std::cout << "gamepad " << gamepadId << " " << button << " " << isDown
+              << std::endl;
+  };
+
+  input.gamepad_axis_callback = [](int gamepadId, GamepadAxis axis, float value,
+                                   float delta) {
+    // std::cout << "(axis) gamepad " << gamepadId << " " << axis << " " <<
+    // value
+    //<< " " << delta << std::endl;
   };
 
   // Main game loop

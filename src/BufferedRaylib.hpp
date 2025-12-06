@@ -48,5 +48,4 @@ namespace raylib {
     // Function which polls all input devices and invokes callbacks
     void PollEvents(bool whileUnfocused = false);
   };
-
 } // namespace raylib
