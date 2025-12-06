@@ -35,5 +35,6 @@ namespace("buffered-raylib", function ()
 			)
 
 			add_deps("buffered-raylib")
+			set_default(false)
 	target_end()
 end)
