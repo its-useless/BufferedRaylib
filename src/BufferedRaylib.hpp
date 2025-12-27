@@ -27,6 +27,10 @@ namespace raylib {
    * handling
    */
   struct BufferedInput {
+  public:
+    // Function which polls all input devices and invokes callbacks
+    void PollEvents(bool whileUnfocused = false);
+
     // Direct callback members
     KeyboardCallback keyboard_callback = nullptr;
     MouseButtonCallback mouse_button_callback = nullptr;
@@ -35,17 +39,14 @@ namespace raylib {
     GamepadAxisCallback gamepad_axis_callback = nullptr;
     MousePositionCallback mouse_position_callback = nullptr;
 
-    // Internal state tracking
   private:
+    void PollKey(KeyboardKey key);
+
     float mouse_wheel_value = 0.0f;
     Vector2 mouse_position = {0, 0};
     std::map<KeyboardKey, bool> keyboard_states;
     std::map<MouseButton, bool> mouse_button_states;
     std::map<std::pair<int, GamepadButton>, bool> gamepad_button_states;
     std::map<std::pair<int, GamepadAxis>, float> gamepad_axis_states;
-
-  public:
-    // Function which polls all input devices and invokes callbacks
-    void PollEvents(bool whileUnfocused = false);
   };
 } // namespace raylib

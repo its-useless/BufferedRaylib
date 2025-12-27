@@ -9,6 +9,19 @@
 
 namespace raylib {
 
+  void BufferedInput::PollKey(KeyboardKey key) {
+    bool isDown = IsKeyDown((KeyboardKey)key);
+    auto it = keyboard_states.find((KeyboardKey)key);
+    if (it == keyboard_states.end()) {
+      // Initialize state silently on first poll
+      keyboard_states[(KeyboardKey)key] = isDown;
+    } else if (it->second != isDown) {
+      // Only fire callback on actual state change
+      keyboard_states[(KeyboardKey)key] = isDown;
+      keyboard_callback((KeyboardKey)key, isDown);
+    }
+  }
+
   void BufferedInput::PollEvents(bool whileUnfocused /*= false*/) {
     if (!whileUnfocused && !IsWindowFocused())
       return;
@@ -16,17 +29,9 @@ namespace raylib {
     // Poll keyboard keys
     if (keyboard_callback) {
       for (int key = KEY_NULL; key <= KEY_KP_EQUAL; key++) {
-        bool isDown = IsKeyDown((KeyboardKey)key);
-        auto it = keyboard_states.find((KeyboardKey)key);
-        if (it == keyboard_states.end()) {
-          // Initialize state silently on first poll
-          keyboard_states[(KeyboardKey)key] = isDown;
-        } else if (it->second != isDown) {
-          // Only fire callback on actual state change
-          keyboard_states[(KeyboardKey)key] = isDown;
-          keyboard_callback((KeyboardKey)key, isDown);
-        }
+        PollKey((KeyboardKey)key);
       }
+      PollKey(KEY_LEFT_CONTROL);
     }
 
     // Poll mouse buttons (check all possible mouse buttons)
@@ -105,7 +110,7 @@ namespace raylib {
       Vector2 newPos = GetMousePosition();
       // Check if this is the first poll (mouse_position still at initial {0,0})
       bool isFirstPoll = (mouse_position.x == 0.0f && mouse_position.y == 0.0f);
-      
+
       if (isFirstPoll) {
         // Silently initialize on first poll, don't fire callback
         mouse_position = newPos;
